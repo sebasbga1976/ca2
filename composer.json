@@ -1,0 +1,11 @@
+{
+    "name": "sergio/ca2php",
+    "description": "ca2",
+    "authors": [
+        {
+            "name": "sbautista",
+            "email": "sbautista@campus.udes.edu.co"
+        }
+    ],
+    "require": {}
+}
