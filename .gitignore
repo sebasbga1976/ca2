@@ -1,0 +1,24 @@
+# Ignorar archivos temporales
+*.log
+*.tmp
+
+# Ignorar la carpeta node_modules
+node_modules/
+dompdf/
+tcpdf/
+
+# Ignorar archivos de sistema
+.DS_Store
+Thumbs.db
+
+# Ignorar archivos de configuración locales
+.env
+conexion.php
+
+# Ignorar carpeta de compilación
+/build/
+dist/
+*.sql
+*.sql
+*.zip
+vendor/
