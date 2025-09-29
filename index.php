@@ -60,7 +60,7 @@
     </style>
 </head>
 <body>
-    
+       
 
     <div class="login-container">
         <div class="login-logo">
@@ -90,8 +90,17 @@
         </form>
         <div class="mt-4 text-center">
             <p><a href="/forgot-password" class="text-decoration-none">¿Olvidaste tu contraseña?</a></p>
-            <p>¿No tienes una cuenta? <a href="/register" class="text-decoration-none">Regístrate aquí</a></p>
+            <p>¿No tienes una cuenta? <a href="login/register.php" class="text-decoration-none">Regístrate aquí</a></p>
         </div>
+        <diV col-sm-12>
+        <?php
+            session_start();        
+            if (!empty($_SESSION['error'])) {
+                echo "<p style='color:red'>".$_SESSION['error']."</p>";
+                unset($_SESSION['error']);
+            }
+        ?>
+    </diV>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

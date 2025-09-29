@@ -11,9 +11,7 @@ $pagina_actual = (isset($_GET['pagina']) && is_numeric($_GET['pagina'])) ? (int)
 $inicio = ($pagina_actual - 1) * $registros_por_pagina;
 
 // ==== Filtros para búsqueda y paginación ====
-$sql_base = "FROM Cliente c
-             INNER JOIN cli_est ce ON c.Codpin = ce.Codpin
-             WHERE 1 = 1";
+$sql_base = "FROM Clientes c INNER JOIN Clientes_Estudiantes ce ON c.Codpin = ce.Codpin -- WHERE 1 =1";
 
 $filtros = [];
 if (!empty($_GET['Documento'])) {
