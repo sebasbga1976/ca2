@@ -1,32 +1,48 @@
 <?php
-    session_start();
-    include_once "../conexion.php";
+// 1. Iniciar sesión al principio (antes de cualquier salida de texto)
+session_start();
+
+include_once __DIR__ . "/../conexion.php";
+
+// 2. Limpieza básica de datos
+$email = trim($_POST['email'] ?? '');
+$password_ingresada = $_POST['password'] ?? '';
+
+if (empty($email) || empty($password_ingresada)) {
+    // Redirigir con un mensaje de error (puedes capturarlo con $_GET['error'])
+    header("Location: ../index.php?error=campos_vacios");
+    exit;
+}
+
+try {
+    // 3. Consulta preparada corregida
+    $sql = "SELECT id, password, Nombres, Apellidos FROM usuarios WHERE email = ? LIMIT 1";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$email]); // Corregido: antes decía $SQL
     
-    if ($_SERVER["REQUEST_METHOD"] === "POST") {
-        $email = trim($_POST['email'] ?? '');
-        $password = $_POST['password'] ?? '';
+    $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    // 4. Verificación lógica unificada
+    if ($usuario && password_verify($password_ingresada, $usuario['password'])) {
+        
+        // Regenerar ID de sesión por seguridad (evita fijación de sesión)
+        session_regenerate_id(true);
+        
+        $_SESSION['usuario_id'] = $usuario['id'];
+        $_SESSION['nombre'] = trim($usuario['Nombres'] . ' ' . $usuario['Apellidos']);
+        
+        // 5. Redirección limpia
+        header("Location: ../menu.php");
+        exit; // Siempre usa exit después de un header Location
+        
+    } else {
+        // Mensaje genérico por seguridad
+        header("Location: ../index.php?error=auth_failed");
+        exit;
+    }
 
-         $sql = "SELECT id, Nombres, Apellidos, password AS password_hash 
-         FROM usuarios
-         WHERE Email = :email";    
-         $stmt = $pdo->prepare($sql);
-         $stmt->execute([':email' => $email]);         
-         $fila = $stmt->fetch(PDO::FETCH_ASSOC);
-         if ($fila && password_verify($password, $fila['password_hash'])) {
-             $_SESSION['autenticado'] = true;
-             $_SESSION['id_usuario'] = $fila['id_usuario'];
-             $_SESSION['nombre_completo'] = $fila['nombre']." ".$fila['apellido'];
-
-             header("Location: ../menu.php");
-             exit;
-         } else {
-             $_SESSION['error'] = "Credenciales incorrectas";
-             header("Location: ../index.php");
-             exit;
-         }
-    } 
-     else {
-         header("Location: ../index.php");
-         exit;
-    } 
-?>
+} catch (PDOException $e) {
+    error_log("Error en Login: " . $e->getMessage());
+    header("Location: ../index.php?error=db_error");
+    exit;
+}

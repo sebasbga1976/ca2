@@ -1,206 +1,184 @@
 <?php
-declare(strict_types=1);
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
+session_start();
+if (!isset($_SESSION['usuario_id'])) {
+    header("Location: index.php");
+    exit();
+}
 
 require_once 'conexion.php';
+require_once 'cripto.php';
 
+// Variables de paginación
 $registros_por_pagina = 10;
-$pagina_actual = (isset($_GET['pagina']) && is_numeric($_GET['pagina'])) ? (int)$_GET['pagina'] : 1;
+$pagina_actual = filter_input(INPUT_GET, 'pagina', FILTER_VALIDATE_INT) ?: 1;
 $inicio = ($pagina_actual - 1) * $registros_por_pagina;
 
-// ==== Filtros para búsqueda y paginación ====
-$sql_base = "FROM Clientes c INNER JOIN Clientes_Estudiantes ce ON c.Codpin = ce.Codpin -- WHERE 1 =1";
-
+// Filtros simplificados
 $filtros = [];
-if (!empty($_GET['Documento'])) {
-    $sql_base .= " AND c.Codpin LIKE :Documento";
-    $filtros[':Documento'] = '%' . $_GET['Documento'] . '%';
+$condiciones = ["1=1"];
+
+$mapeo_campos = [
+    'EstCod' => 'ce.EstCod',
+    'Documento' => 'c.Codpin',
+    'primer_nombre' => 'c.PNombre',
+    'segundo_nombre' => 'c.SNombre',
+    'primer_apellido' => 'c.PApellido',
+    'segundo_apellido' => 'c.SApellido'
+];
+
+foreach ($mapeo_campos as $get_key => $db_col) {
+    if (!empty($_GET[$get_key])) {
+        $condiciones[] = "$db_col LIKE :$get_key";
+        $filtros[":$get_key"] = '%' . $_GET[$get_key] . '%';
+    }
 }
-if (!empty($_GET['primer_nombre'])) {
-    $sql_base .= " AND c.PNombre LIKE :primer_nombre";
-    $filtros[':primer_nombre'] = '%' . $_GET['primer_nombre'] . '%';
-}
-if (!empty($_GET['segundo_nombre'])) {
-    $sql_base .= " AND c.SNombre LIKE :segundo_nombre";
-    $filtros[':segundo_nombre'] = '%' . $_GET['segundo_nombre'] . '%';
-}
-if (!empty($_GET['primer_apellido'])) {
-    $sql_base .= " AND c.PApellido LIKE :primer_apellido";
-    $filtros[':primer_apellido'] = '%' . $_GET['primer_apellido'] . '%';
-}
-if (!empty($_GET['segundo_apellido'])) {
-    $sql_base .= " AND c.SApellido LIKE :segundo_apellido";
-    $filtros[':segundo_apellido'] = '%' . $_GET['segundo_apellido'] . '%';
-}
+
+// Filtros exactos (Selects)
 if (isset($_GET['es_estudiante']) && $_GET['es_estudiante'] !== '') {
-    $sql_base .= " AND c.Estudiante = :es_estudiante";
+    $condiciones[] = "c.Estudiante = :es_estudiante";
     $filtros[':es_estudiante'] = $_GET['es_estudiante'];
 }
 if (isset($_GET['es_docente']) && $_GET['es_docente'] !== '') {
-    $sql_base .= " AND c.Docente = :es_docente";
+    $condiciones[] = "c.Docente = :es_docente";
     $filtros[':es_docente'] = $_GET['es_docente'];
 }
 
-// ==== Consulta con LIMIT ====
-$sql_limit = "SELECT DISTINCT c.Codpin, 
-                     UPPER(c.PNombre) AS PNombre,
-                     UPPER(c.SNombre) AS SNombre,
-                     UPPER(c.PApellido) AS PApellido,
-                     UPPER(c.SApellido) AS SApellido
-              $sql_base
-              LIMIT :inicio, :registros";
+$where_sql = implode(" AND ", $condiciones);
 
-$stmt = $pdo->prepare($sql_limit);
-foreach ($filtros as $clave => $valor) {
-    $stmt->bindValue($clave, $valor);
-}
+// Consulta
+$sql_select = "SELECT DISTINCT c.Codpin, UPPER(c.PNombre) as PNombre, UPPER(c.SNombre) as SNombre, 
+               UPPER(c.PApellido) as PApellido, UPPER(c.SApellido) as SApellido 
+               FROM Cliente c 
+               INNER JOIN Cliente_Estudiante ce ON c.Codpin = ce.Codpin
+               INNER JOIN Estudiante e ON ce.EstCod = e.Estcod
+               WHERE $where_sql 
+               ORDER BY c.PApellido, c.SApellido 
+               LIMIT :inicio, :registros";
+
+$stmt = $pdo->prepare($sql_select);
+foreach ($filtros as $clave => $valor) $stmt->bindValue($clave, $valor);
 $stmt->bindValue(':inicio', $inicio, PDO::PARAM_INT);
 $stmt->bindValue(':registros', $registros_por_pagina, PDO::PARAM_INT);
 $stmt->execute();
 $personas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// ==== Conteo total para paginación ====
-$sql_total = "SELECT COUNT(*) $sql_base";
+// Total para paginación
+$sql_total = "SELECT COUNT(DISTINCT c.Codpin) FROM Cliente c 
+              INNER JOIN Cliente_Estudiante ce ON c.Codpin = ce.Codpin
+              INNER JOIN Estudiante e ON ce.EstCod = e.Estcod 
+              WHERE $where_sql";
 $stmt_total = $pdo->prepare($sql_total);
-foreach ($filtros as $clave => $valor) {
-    $stmt_total->bindValue($clave, $valor);
-}
+foreach ($filtros as $clave => $valor) $stmt_total->bindValue($clave, $valor);
 $stmt_total->execute();
-$total_registros = $stmt_total->fetchColumn();
-$total_paginas = (int) ceil($total_registros / $registros_por_pagina);
+
+$total_registros = (int) $stmt_total->fetchColumn();
+$total_paginas = ceil($total_registros / $registros_por_pagina);
+
+// Calculamos los números para el texto "Mostrando X a Y de Z"
+$inicio_mostrado = ($total_registros > 0) ? ($inicio + 1) : 0;
+$fin_mostrado = min($inicio + count($personas), $total_registros);
 ?>
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Información de Personas</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <style>
-        .pagination-custom {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-top: 20px;
-            gap: 20px;
-        }
-        .pagination-custom a,
-        .pagination-custom span {
-            min-width: 100px;
-            text-align: center;
-            padding: 8px 12px;
-            text-decoration: none;
-            border-radius: 5px;
-        }
-        .pagination-custom .current {
-            background-color: #007bff;
-            color: white;
-            font-weight: bold;
-        }
-        table {
-            width: 100%;
-            margin-top: 20px;
-        }
-        th, td {
-            padding: 8px;
-            border: 1px solid #ccc;
-        }
-        .view-student-btn {
-            background-color: #007bff;
-            color: white;
-            padding: 6px 10px;
-            border: none;
-            border-radius: 4px;
-            text-decoration: none;
-        }
-        .view-student-btn:hover {
-            background-color: #0056b3;
-        }
-    </style>
+    <title>Gestión de Personas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 </head>
-<body class="container">
-    <h1 class="mt-4">Información de Personas</h1>
+<body class="bg-light">
 
-    <!-- Filtros -->
-    <form method="get" class="mt-3 border p-3">
-        <div class="row">
-            <div class="col-md-2"><input class="form-control" name="Documento" placeholder="Número Documento" value="<?= htmlspecialchars($_GET['Documento'] ?? '') ?>"></div>
-            <div class="col-md-3"><input class="form-control" name="primer_nombre" placeholder="Primer Nombre" value="<?= htmlspecialchars($_GET['primer_nombre'] ?? '') ?>"></div>
-            <div class="col-md-2"><input class="form-control" name="segundo_nombre" placeholder="Segundo Nombre" value="<?= htmlspecialchars($_GET['segundo_nombre'] ?? '') ?>"></div>
-            <div class="col-md-3"><input class="form-control" name="primer_apellido" placeholder="Primer Apellido" value="<?= htmlspecialchars($_GET['primer_apellido'] ?? '') ?>"></div>
-            <div class="col-md-2"><input class="form-control" name="segundo_apellido" placeholder="Segundo Apellido" value="<?= htmlspecialchars($_GET['segundo_apellido'] ?? '') ?>"></div>
-        </div>        
-        <div class="row mt-2">
-            <div class="col-md-4">
-                <select name="es_estudiante" class="form-control">
-                    <option value="">¿Es Estudiante?</option>
-                    <option value="1" <?= ($_GET['es_estudiante'] ?? '') === '1' ? 'selected' : '' ?>>Sí</option>
-                    <option value="0" <?= ($_GET['es_estudiante'] ?? '') === '0' ? 'selected' : '' ?>>No</option>
-                </select>
-            </div>
-            <div class="col-md-4">
-                <select name="es_docente" class="form-control">
-                    <option value="">¿Es Docente?</option>
-                    <option value="1" <?= ($_GET['es_docente'] ?? '') === '1' ? 'selected' : '' ?>>Sí</option>
-                    <option value="0" <?= ($_GET['es_docente'] ?? '') === '0' ? 'selected' : '' ?>>No</option>
-                </select>
-            </div>
-            <div class="col-md-4 d-flex justify-content-end">
-                <button type="submit" class="btn btn-primary mr-2">Filtrar</button>
-                <a href="index.php" class="btn btn-secondary">Limpiar</a>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm mb-4">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="#">Sistema Académico</a>
+            <div class="ms-auto">
+                <a href="salir.php" class="btn btn-outline-light btn-sm">
+                    <i class="fas fa-sign-out-alt"></i> Salir
+                </a>
             </div>
         </div>
-    </form>
+    </nav>
 
-    <!-- Tabla -->
-    <?php if (!empty($personas)): ?>
-        <table class="table table-bordered table-striped">
-            <thead>
-                <tr>
-                    <th>Documento</th>
-                    <th>Primer Nombre</th>
-                    <th>Segundo Nombre</th>
-                    <th>Primer Apellido</th>
-                    <th>Segundo Apellido</th>
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($personas as $p): ?>
-                    <tr>
-                        <td><?= htmlspecialchars($p['Codpin']) ?></td>
-                        <td><?= htmlspecialchars($p['PNombre']) ?></td>
-                        <td><?= htmlspecialchars($p['SNombre']) ?></td>
-                        <td><?= htmlspecialchars($p['PApellido']) ?></td>
-                        <td><?= htmlspecialchars($p['SApellido']) ?></td>
-                        <td><a href="estudiantes.php?codpin=<?= urlencode($p['Codpin']) ?>" class="view-student-btn">Ver Estudiante</a></td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
+    <div class="container">
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-white fw-bold">Filtrar Búsqueda</div>
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <?php foreach ($mapeo_campos as $key => $col): ?>
+                        <div class="col-md-3">
+                            <input class="form-control form-control-sm" name="<?= $key ?>" placeholder="<?= ucwords(str_replace('_', ' ', $key)) ?>" value="<?= htmlspecialchars($_GET[$key] ?? '') ?>">
+                        </div>
+                    <?php endforeach; ?>
+                    <div class="col-md-2">
+                        <select name="es_estudiante" class="form-select form-select-sm">
+                            <option value="">¿Es Estudiante?</option>
+                            <option value="1" <?= ($_GET['es_estudiante'] ?? '') === '1' ? 'selected' : '' ?>>Sí</option>
+                            <option value="0" <?= ($_GET['es_estudiante'] ?? '') === '0' ? 'selected' : '' ?>>No</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary btn-sm w-100"><i class="fas fa-search"></i> Filtrar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
-        <!-- Paginación -->
-        <?php if ($total_paginas > 1): ?>
-            <div class="pagination-custom">
-                <?php if ($pagina_actual > 1): ?>
-                    <a class="btn btn-outline-primary" href="?pagina=<?= $pagina_actual - 1 . '&' . http_build_query(array_diff_key($_GET, ['pagina' => ''])) ?>">Anterior</a>
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Documento</th>
+                                <th>Nombres</th>
+                                <th>Apellidos</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($personas as $p): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($p['Codpin']) ?></td>
+                                    <td><?= htmlspecialchars($p['PNombre'] . ' ' . $p['SNombre']) ?></td>
+                                    <td><?= htmlspecialchars($p['PApellido'] . ' ' . $p['SApellido']) ?></td>
+                                    <td class="text-center">
+                                        <a href="estudiantes.php?token=<?= encryptToken(urlencode($p['Codpin'])) ?>" class="btn btn-sm btn-outline-primary" title="Ver Perfil">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center my-3">
+            <div class="alert alert-info py-2 mb-3">
+                <?php if ($total_registros > 0): ?>
+                    Mostrando <strong><?= $inicio_mostrado ?></strong> a <strong><?= $fin_mostrado ?></strong> de <strong><?= $total_registros ?></strong> resultados.
                 <?php else: ?>
-                    <span class="btn btn-outline-secondary disabled">Anterior</span>
-                <?php endif; ?>
-
-                <span class="current"><?= $pagina_actual ?></span>
-
-                <?php if ($pagina_actual < $total_paginas): ?>
-                    <a class="btn btn-outline-primary" href="?pagina=<?= $pagina_actual + 1 . '&' . http_build_query(array_diff_key($_GET, ['pagina' => ''])) ?>">Siguiente</a>
-                <?php else: ?>
-                    <span class="btn btn-outline-secondary disabled">Siguiente</span>
+                    No se encontraron registros.
                 <?php endif; ?>
             </div>
-        <?php endif; ?>
+        </div>
 
-    <?php else: ?>
-        <p class="mt-4">No se encontraron personas con los criterios de búsqueda.</p>
-    <?php endif; ?>
+        <?php if ($total_paginas > 1): ?>
+            <nav class="mt-4">
+                <ul class="pagination justify-content-center">
+                    <li class="page-item <?= $pagina_actual <= 1 ? 'disabled' : '' ?>">
+                        <a class="page-link" href="?pagina=<?= $pagina_actual - 1 ?>&<?= http_build_query(array_diff_key($_GET, ['pagina' => ''])) ?>">Anterior</a>
+                    </li>
+                    <li class="page-item active"><span class="page-link"><?= $pagina_actual ?></span></li>
+                    <li class="page-item <?= $pagina_actual >= $total_paginas ? 'disabled' : '' ?>">
+                        <a class="page-link" href="?pagina=<?= $pagina_actual + 1 ?>&<?= http_build_query(array_diff_key($_GET, ['pagina' => ''])) ?>">Siguiente</a>
+                    </li>
+                </ul>
+            </nav>
+        <?php endif; ?>
+    </div>
+    
 </body>
 </html>

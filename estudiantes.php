@@ -1,50 +1,47 @@
 <?php
-declare(strict_types=1); // Habilita el modo estricto de tipos
-
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
+session_start();
+if (!isset($_SESSION['usuario_id'])) {
+    header("Location: index.php");
+    exit();
+}
 
 require_once 'conexion.php';
+require_once 'cripto.php';
 
-// Verificar si se recibió el Codpin por GET
-if (!isset($_GET['codpin']) || empty($_GET['codpin'])) {
-    die("No se ha especificado un Codpin de persona.");
+// Validar entrada
+$token = filter_input(INPUT_GET, 'token', FILTER_SANITIZE_SPECIAL_CHARS);
+if (!$token) {
+    die("No se ha especificado un código de estudiante.");
 }
 
-$codpin = $_GET['codpin'];
+$codpin = decryptToken($token);
+if (!$codpin) {
+    die("Token inválido.");
+}
 
-// Consulta SQL para obtener todos los registros de estudiante para el Codpin especificado
-$sql = "SELECT distinct
-c2.Nombre_Programa AS ProgramaEstudiante,
-e.cohortecod AS CohorteEstudiante,
-e.Estcod AS CodigoEstudiante,
-e.estest2cod as EstadoEstudiante,
-e.estindiceacad AS PromedioEstudiante,
-e.estcondcod AS CondicionEstudiante,
-e.estcredsolaprob AS MencionEstudiante
-FROM cli_est c 
-inner JOIN Estudiante e on c.CodEst = e.Estcod
-INNER join Carreras c2 on e.carrcod = c2.Cod_Programa
-WHERE c.Codpin = :codpin
-ORDER BY c2.Nombre_Programa";
+// Consultas
+$sql_estudiante = "SELECT distinct e.Estcod, ca.Nombre_Programa, e.cohortecod, e.estest2cod, 
+                          e.estindiceacad, e.estcondcod, e.estcredtotcursapro
+                   FROM Cliente_Estudiante ce
+                   INNER JOIN Estudiante e ON ce.EstCod = e.Estcod
+                   INNER JOIN Carreras ca ON e.carrcod = ca.CarrCod
+                   WHERE ce.Codpin = :codpin
+                   ORDER BY e.Estcod";
 
-$stmt = $pdo->prepare($sql);
-$stmt->bindParam(':codpin', $codpin, PDO::PARAM_STR);
-$stmt->execute();
-$registros_estudiante = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmt = $pdo->prepare($sql_estudiante);
+$stmt->execute([':codpin' => $codpin]);
+$registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Consulta SQL para obtener la información básica de la persona
 $sql_persona = "SELECT PNombre, SNombre, PApellido, SApellido FROM Cliente WHERE Codpin = :codpin";
-$stmt_persona = $pdo->prepare($sql_persona);
-$stmt_persona->bindParam(':codpin', $codpin, PDO::PARAM_STR);
-$stmt_persona->execute();
-$persona = $stmt_persona->fetch(PDO::FETCH_ASSOC);
+$stmt_p = $pdo->prepare($sql_persona);
+$stmt_p->execute([':codpin' => $codpin]);
+$persona = $stmt_p->fetch(PDO::FETCH_ASSOC);
 
 if (!$persona) {
-    die("No se encontró información de la persona para el Codpin: " . htmlspecialchars($codpin));
+    die("Persona no encontrada.");
 }
 
+$nombre_completo = "{$persona['PNombre']} {$persona['SNombre']} {$persona['PApellido']} {$persona['SApellido']}";
 ?>
 
 <!DOCTYPE html>
@@ -53,75 +50,76 @@ if (!$persona) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Registros de Estudiante</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <style>
-        body {
-            font-family: sans-serif;
-        }
-        .student-records {
-            margin-top: 20px;
-        }
-        th, td {
-            text-align: left;
-        }
-        .view-history-btn {
-            padding: 6px 10px;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 0.9em;
-        }
-        .view-history-btn:hover {
-            background-color: #1e7e34;
-        }
-    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 </head>
-<body>
+<body class="bg-light">
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm mb-4">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="menu.php">Sistema Académico</a>
+            <div class="ms-auto">
+                <a href="salir.php" class="btn btn-outline-light btn-sm"><i class="fas fa-sign-out-alt"></i> Salir</a>
+            </div>
+        </div>
+    </nav>
+
     <div class="container">
-        <h1>Registros de Estudiante</h1>
-        <h2><?php echo htmlspecialchars($persona['PNombre'] . ' ' . ($persona['SNombre'] ?? '') . ' ' . $persona['PApellido'] . ' ' . ($persona['SApellido'] ?? '')); ?></h2>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="h4 text-secondary mb-0">
+                <i class="fas fa-user-graduate me-2"></i><?= htmlspecialchars($nombre_completo) ?>
+            </h2>
+            <a href="personas.php" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i> Volver</a>
+        </div>
 
-        <?php if (!empty($registros_estudiante)): ?>
-            <table class="table student-records">
-                <thead>
-                    <tr>
-                        <th>Programa Académico</th>
-                        <th>Código Estudiante</th>
-                        <th>Cohorte</th>
-                        <th>Estado Estudiante</th>
-                        <th>Condición Estudiante</th>
-                        <th>Promedio</th>
-                        <th>Créditos aprobados</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($registros_estudiante as $registro): ?>
-                        <tr>
-                            <td><?php echo htmlspecialchars($registro['ProgramaEstudiante']); ?></td>
-                            <td><?php echo htmlspecialchars($registro['CodigoEstudiante']); ?></td>
-                            <td><?php echo htmlspecialchars($registro['CohorteEstudiante']); ?></td>
-                            <td><?php echo htmlspecialchars($registro['EstadoEstudiante']); ?></td>
-                            <td><?php echo htmlspecialchars($registro['CondicionEstudiante']); ?></td>
-                            <td><?php echo htmlspecialchars(number_format((float)$registro['PromedioEstudiante'], 2, '.', '')); ?></td>
-                            <td><?php echo htmlspecialchars($registro['MencionEstudiante'] ?? 'N/A'); ?></td>
-                            <td>
-                                <a href="historial.php?estcod=<?php echo urlencode($registro['CodigoEstudiante']); ?>" class="view-history-btn">Ver Historial</a>
-                                <a href="pdf.php?estcod=<?php echo urlencode($registro['CodigoEstudiante']); ?>" class="view-pdf-btn">pdf</a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php else: ?>
-            <p>No se encontraron registros de estudiante para esta persona.</p>
-        <?php endif; ?>
-
-        <p><a href="personas.php" class="btn btn-primary">Volver a la lista de Personas</a></p>
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-bold">Registros Académicos</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Programa</th>
+                                <th>Código</th>
+                                <th>Cohorte</th>
+                                <th>Estado</th>
+                                <th>Condición</th>
+                                <th>Promedio</th>
+                                <th>Créditos</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if ($registros): ?>
+                                <?php foreach ($registros as $r): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($r['Nombre_Programa']) ?></td>
+                                        <td><?= htmlspecialchars($r['Estcod']) ?></td>
+                                        <td><?= htmlspecialchars($r['cohortecod']) ?></td>
+                                        <td><?= htmlspecialchars($r['estest2cod']) ?></td>
+                                        <td><?= htmlspecialchars($r['estcondcod']) ?></td>
+                                        <td><?= number_format((float)$r['estindiceacad'], 2) ?></td>
+                                        <td><?= htmlspecialchars($r['estcredtotcursapro'] ?? 'N/A') ?></td>
+                                        <td class="text-center">
+                                            <div class="btn-group" role="group">
+                                                <a href="historial.php?token=<?= encryptToken(urlencode($r['Estcod'])) ?>" class="btn btn-sm btn-outline-info" title="Ver Historial">
+                                                    <i class="fas fa-book"></i>
+                                                </a>
+                                                <a href="pdf.php?token=<?= encryptToken(urlencode($r['Estcod'])) ?>" class="btn btn-sm btn-outline-danger" title="Descargar PDF">
+                                                    <i class="fas fa-file-pdf"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr><td colspan="8" class="text-center py-3">No hay registros asociados.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </body>
 </html>
