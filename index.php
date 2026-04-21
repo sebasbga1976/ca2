@@ -89,7 +89,7 @@
             <button type="submit" class="btn btn-primary">Entrar</button>
         </form>
         <div class="mt-4 text-center">
-            <p><a href="/forgot-password" class="text-decoration-none">¿Olvidaste tu contraseña?</a></p>
+            <p><a href="/restaurar.php" class="text-decoration-none">¿Olvidaste tu contraseña?</a></p>
             <p>¿No tienes una cuenta? <a href="login/register.php" class="text-decoration-none">Regístrate aquí</a></p>
         </div>
         <diV col-sm-12>
