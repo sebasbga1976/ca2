@@ -16,30 +16,33 @@ if (empty($email) || empty($password_ingresada)) {
 
 try {
     // 3. Consulta preparada corregida
-    $sql = "SELECT id, password, Nombres, Apellidos FROM usuarios WHERE email = ? LIMIT 1";
+    $sql = "SELECT id, password, Nombres, Apellidos, password_reset_required FROM usuarios WHERE email = ? and `activo`=1 LIMIT 1";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$email]); // Corregido: antes decía $SQL
     
     $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    // 4. Verificación lógica unificada
-    if ($usuario && password_verify($password_ingresada, $usuario['password'])) {
-        
-        // Regenerar ID de sesión por seguridad (evita fijación de sesión)
-        session_regenerate_id(true);
-        
-        $_SESSION['usuario_id'] = $usuario['id'];
-        $_SESSION['nombre'] = trim($usuario['Nombres'] . ' ' . $usuario['Apellidos']);
-        
-        // 5. Redirección limpia
-        header("Location: ../menu.php");
-        exit; // Siempre usa exit después de un header Location
-        
-    } else {
-        // Mensaje genérico por seguridad
-        header("Location: ../index.php?error=auth_failed");
-        exit;
-    }
+        // 4. Verificación lógica unificada
+        if ($usuario && password_verify($password_ingresada, $usuario['password'])) {            
+            // Regenerar ID de sesión por seguridad (evita fijación de sesión)
+            session_regenerate_id(true);        
+            $_SESSION['usuario_id'] = $usuario['id'];
+            $_SESSION['nombre'] = trim($usuario['Nombres'] . ' ' . $usuario['Apellidos']);        
+
+            if ($usuario['password_reset_required'] == 1) {
+                // Redirigir a una página de "Cambiar contraseña obligatoria"
+                header("Location: actualiza_password.php");
+                exit();
+            }
+
+            // 5. Redirección limpia
+            header("Location: ../menu.php");
+            exit; // Siempre usa exit después de un header Location
+            
+        } else {            
+            // Mensaje genérico por seguridad
+            header("Location: ../index.php?error=auth_failed");
+            exit;
+        }
 
 } catch (PDOException $e) {
     error_log("Error en Login: " . $e->getMessage());

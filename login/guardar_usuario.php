@@ -1,60 +1,76 @@
 <?php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     include_once '../conexion.php';
+    require_once '../EmailService.php';
 
+    // 1. Recibir y sanitizar datos
     $Nombres   = strtoupper(trim($_POST['nombres'] ?? ''));
     $Apellidos = strtoupper(trim($_POST['apellidos'] ?? ''));
     $Correo    = strtolower(trim($_POST['email'] ?? ''));
     $password  = $_POST['password'] ?? '';
     $password2 = $_POST['password2'] ?? '';
     
-    // 1. Validar contraseñas
-    if ($password !== $password2) {
-        echo "❌ Las contraseñas no coinciden. <a href='register.php'>Volver</a>";        
-        exit;
+    $nombre_completo = $Nombres . ' ' . $Apellidos;
+
+    // Validación básica: campos vacíos
+    if (empty($Nombres) || empty($Apellidos) || empty($Correo) || empty($password)) {
+        die("❌ Todos los campos son obligatorios. <a href='register.php'>Volver</a>");
     }
 
-    // 2. Verificar si ya existe el usuario
-    $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE email = :email");
+    // 2. Validar contraseñas
+    if ($password !== $password2) {
+        die("❌ Las contraseñas no coinciden. <a href='register.php'>Volver</a>");
+    }
+
+    // 3. Verificar si el usuario ya existe
+    $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE email = :email LIMIT 1");
     $stmt->execute([':email' => $Correo]);
         
     if ($stmt->fetch()) {
-        echo "❌ El correo ya está registrado. <a href='register.php'>Volver</a>";
-        exit;
+        die("❌ El correo ya está registrado. <a href='register.php'>Volver</a>");
     }
 
-   // 3. Encriptar y ejecutar inserción
+    // 4. Inserción
     $password_hash = password_hash($password, PASSWORD_DEFAULT);
 
-    $sql = "INSERT INTO usuarios (Nombres, Apellidos, Email, password) 
-            VALUES (:nombres, :apellidos, :email, :password)";
-    
-    $stmt = $pdo->prepare($sql);
-
     try {
-        // Ejecutamos la consulta
-        $stmt->execute([
+        $sql = "INSERT INTO usuarios (Nombres, Apellidos, Email, password) 
+                VALUES (:nombres, :apellidos, :email, :password)";    
+        $stmt = $pdo->prepare($sql);
+        
+        $resultado = $stmt->execute([
             ':nombres'   => $Nombres,
             ':apellidos' => $Apellidos,
-            ':email'    => $Correo,
-            ':password' => $password_hash
+            ':email'     => $Correo,
+            ':password'  => $password_hash
         ]);
 
-        // SI LLEGA AQUÍ, TODO SALIÓ BIEN. REDIRIGIMOS.
-        header("Location: ../index.php");
-        exit(); // IMPORTANTE: Terminar el script tras el header
+        if ($resultado) {
+            // Intentamos enviar el correo
+            try {
+                $emailService = new EmailService();
+                $emailService->enviarBienvenida($Correo, $nombre_completo);
+            } catch (Exception $e) {
+                // Registramos el error internamente sin interrumpir el registro
+                error_log("Error al enviar correo de bienvenida a $Correo: " . $e->getMessage());
+            }
+            
+            // Redirección exitosa
+            header("Location: ../index.php");
+            exit();
+        }
 
     } catch (PDOException $e) {
-        // Si hay error, el código salta aquí
-        die("❌ Error en la base de datos: " . $e->getMessage());
+        error_log("Error en DB: " . $e->getMessage());
+        die("❌ Hubo un error al procesar el registro. Intenta más tarde.");
     }
 
 } else {
-    // Esto se ejecutará cuando entres a la página normalmente (GET)
     echo "<h1>El archivo está cargando correctamente.</h1>";
     echo "<p>Esperando datos del formulario...</p>";
 }
-
-
-
 ?>

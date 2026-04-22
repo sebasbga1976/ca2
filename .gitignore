@@ -22,3 +22,6 @@ dist/
 *.sql
 *.zip
 vendor/
+
+/vendor
+.env
