@@ -22,7 +22,7 @@ $stmt->execute([$estcod]);
 $info = $stmt->fetch(PDO::FETCH_ASSOC);
 
 $stmt_h = $pdo->prepare("SELECT h.Persecuencia, m.Mat_Nombre, h.Matcursadascalif, h.Matcreditos, 
-                                h.Condcod, h.Matcarrhorteoricas, h.Matcarrhorpracticas, h.Calificacionesestatus
+                                h.Condcod, h.Matcarrhorteoricas, h.Matcarrhorpracticas, h.Calificacionesestatus, h.Matcursadascaracter
                         FROM Historial h
                         INNER JOIN Materias m ON m.Mat_Cod = h.Matcod
                         WHERE h.Estcod = ?
@@ -96,6 +96,9 @@ foreach ($data_agrupada as $periodo => $materias) {
     $sem_creditos = 0;
 
     foreach ($materias as $row) {
+        if (in_array($row['Matcursadascaracter'], ['A', 'R'])) {
+                $row['Matcursadascalif'] = $row['Matcursadascaracter'];
+            }
         if ($row['Calificacionesestatus'] !== 'AT' && $row['Matcreditos'] > 0) {
             $sem_sum_ponderada += ((float)$row['Matcursadascalif'] * (int)$row['Matcreditos']);
             $sem_creditos += (int)$row['Matcreditos'];
