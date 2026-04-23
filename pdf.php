@@ -15,10 +15,11 @@ require 'numletras.php';
 $estcod = decryptToken($_REQUEST['token']) ?? die("No se ha especificado un código de estudiante.");
 
 // 2. Consulta de información del estudiante
-$query_info = "SELECT ce.EstCod, CONCAT(c.PNombre, ' ', c.SNombre, ' ', c.PApellido, ' ', c.SApellido) AS Nombre, c.Codpin, c.Exp, c2.Nombre_Programa
+$query_info = "SELECT DISTINCT ce.EstCod, CONCAT(c.PNombre, ' ', c.SNombre, ' ', c.PApellido, ' ', c.SApellido) AS Nombre, c.Codpin, c.Exp, c2.Nombre_Programa
                FROM Cliente_Estudiante ce
                INNER JOIN Cliente c ON c.Codpin = ce.Codpin
-               INNER JOIN Carreras c2 ON ce.Carr_Cod = c2.CarrCod
+               INNER JOIN Estudiante e on ce.EstCod= e.Estcod
+               INNER JOIN Carreras c2 ON e.carrcod = c2.CarrCod               
                WHERE ce.EstCod = ?";
 $stmt_info = $pdo->prepare($query_info);
 $stmt_info->bindParam(1, $estcod, PDO::PARAM_STR);
@@ -38,7 +39,7 @@ $nom_prog = $info['Nombre_Programa'] ?? 'N/A'; // Corregido: antes decía Nombre
 // 3. Obtención de datos del Historial
 $query_historial = "SELECT h.Perano, h.Persecuencia, h.Matcod, m.Mat_Nombre, h.Condcod, ROUND(h.Matcursadascalif, 1) AS Matcursadascalif,
                            h.Matcreditos, h.Matcarrhorteoricas, h.Matcarrhorpracticas, h.Calificacionesestatus,
-                           ROUND((h.Matcreditos * h.Matcursadascalif), 1) AS producto
+                           ROUND((h.Matcreditos * h.Matcursadascalif), 1) AS producto, h.Matcursadascaracter
                     FROM Historial h
                     INNER JOIN Materias m ON m.Mat_Cod = h.Matcod
                     WHERE h.Estcod = ?
@@ -102,6 +103,9 @@ function generateTable($pdf, $headerCells, $cellWidths, $data, $printHeader = tr
         $pdf->SetFillColor($fill ? 248 : 255);
         foreach ($headerCells as $i => $label) {
             $content = '';
+            if (in_array($row['Matcursadascaracter'], ['A', 'R'])) {
+                $row['Matcursadascalif'] = $row['Matcursadascaracter'];
+            }
             switch ($label) {
                 case 'PERIODO': $content = $row['Persecuencia'] ?? ''; break;
                 case 'ASIGNATURA CURSADA': $content = $row['Mat_Nombre'] ?? ''; break; // Ajustado índice
