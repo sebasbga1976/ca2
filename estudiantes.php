@@ -102,11 +102,17 @@ $nombre_completo = "{$persona['PNombre']} {$persona['SNombre']} {$persona['PApel
                                         <td><?= htmlspecialchars($r['estcredtotcursapro'] ?? 'N/A') ?></td>
                                         <td class="text-center">
                                             <div class="btn-group" role="group">
+
                                                 <a href="historial.php?token=<?= encryptToken(urlencode($r['Estcod'])) ?>" class="btn btn-sm btn-outline-info" title="Ver Historial">
                                                     <i class="fas fa-book"></i>
                                                 </a>
+                                                
                                                 <a href="pdf.php?token=<?= encryptToken(urlencode($r['Estcod'])) ?>" class="btn btn-sm btn-outline-danger" title="Descargar PDF">
                                                     <i class="fas fa-file-pdf"></i>
+                                                </a>
+
+                                                <a href="notas.php?token=<?= encryptToken(urlencode($r['Estcod'])) ?>" class="btn btn-sm btn-outline-primary" title="Notas">
+                                                    <i class="fa fa-commenting" aria-hidden="true"></i>
                                                 </a>
                                             </div>
                                         </td>
