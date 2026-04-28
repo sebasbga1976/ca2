@@ -114,6 +114,10 @@ $nombre_completo = "{$persona['PNombre']} {$persona['SNombre']} {$persona['PApel
                                                 <a href="notas.php?token=<?= encryptToken(urlencode($r['Estcod'])) ?>" class="btn btn-sm btn-outline-primary" title="Notas">
                                                     <i class="fa fa-commenting" aria-hidden="true"></i>
                                                 </a>
+
+                                                <a href="fp.php?token=<?= encryptToken(urlencode($r['Estcod'])) ?>" class="btn btn-sm btn-outline-primary" title="Formación permanente">
+                                                    <i class="fa fa-commenting" aria-hidden="true"></i>
+                                                </a>
                                             </div>
                                         </td>
                                     </tr>
