@@ -1,8 +1,6 @@
 <?php
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
 session_start();
+$hoy = date("Y-m-d");
 require(__DIR__ . '/pdf/fpdf.php');
 if (!isset($_SESSION['usuario_id'])) {
     die("Acceso denegado.");
@@ -51,26 +49,13 @@ if (!$reg) {
     die("No se encontró registro para este estudiante.");
 }
 
-// --- YA NO HACE FALTA LLAMAR A FETCH DE NUEVO ---
-
-// 3. Preparar variables
-$Nombresc = $reg['NombreCompleto'];
-$Ndoc     = $reg['Codpin'];       // Asignado según tu petición
-$Ncurso   = $reg['Mat_Nombre']; 
-$ano      = $reg['Perano'];       
-$V        = $reg['Persecuencia']; 
-$Fecha    = ($V != 1) ? 'Noviembre 30 de ' . $ano : 'Junio 30 de ' . $ano;
-
-// 4. Registro de log (usando sentencias preparadas)
-$hoy = date("Y-m-d");
-
 // 5. Preparar variables para el PDF
 $Nombresc = $reg['NombreCompleto'];
 $Ndoc     = $reg['Codpin']; 
 $Ncurso   = $reg['Mat_Nombre']; 
 
 // Lógica de fechas
-$V        = $reg['Persecuencia']; 
+$V        = substr($reg['Persecuencia'], -1); ; 
 $Fecha    = ($V != 1) ? 'Noviembre 30 de ' . $ano : 'Junio 30 de ' . $ano;
 
 // 6. Generación del PDF
@@ -109,7 +94,7 @@ $pdf->Cell(130, 10, utf8_decode("24"), 0, 1, 'R');
 $pdf->Ln(-4);
 $pdf->Cell(20);
 // Ajuste de posición de fecha
-$pdf->Cell(320, 10, utf8_decode("Bucaramanga                    ". $Fecha), 0, 1, 'C');
+$pdf->Cell(310, 10, utf8_decode("Bucaramanga                    ". $Fecha), 0, 1, 'C');
 
 $pdf->Output();
 ?>
