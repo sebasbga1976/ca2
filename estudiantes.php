@@ -20,19 +20,21 @@ if (!$codpin) {
 }
 
 // Consultas
-$sql_estudiante = "SELECT distinct e.Estcod, ca.Nombre_Programa, e.cohortecod, e.estest2cod, 
-                          e.estindiceacad, e.estcondcod, e.estcredtotcursapro
-                   FROM Cliente_Estudiante ce
-                   INNER JOIN Estudiante e ON ce.EstCod = e.Estcod
-                   INNER JOIN Carreras ca ON e.carrcod = ca.CarrCod
-                   WHERE ce.Codpin = :codpin
-                   ORDER BY e.Estcod";
+$sql_estudiante = "SELECT distinct e.Estcod, ca.Nombre_Programa, 
+e.cohortecod, e.estest2cod, e.estindiceacad, e.estcondcod, e.estcredtotcursapro 
+FROM Cliente c
+inner join  Cliente_Estudiante ce ON c.Codpin = ce.CodPin
+INNER join Estudiante e ON ce.EstCod = e.Estcod
+inner join Historial h ON e.Estcod = h.Estcod
+LEFT JOIN Carreras ca ON e.carrcod = ca.CarrCod
+WHERE ce.CodPin=:codpin
+ORDER BY e.Estcod";
 
 $stmt = $pdo->prepare($sql_estudiante);
 $stmt->execute([':codpin' => $codpin]);
 $registros = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$sql_persona = "SELECT PNombre, SNombre, PApellido, SApellido FROM Cliente WHERE Codpin = :codpin";
+$sql_persona = "SELECT Nombre_Completo FROM Cliente WHERE Codpin = :codpin";
 $stmt_p = $pdo->prepare($sql_persona);
 $stmt_p->execute([':codpin' => $codpin]);
 $persona = $stmt_p->fetch(PDO::FETCH_ASSOC);
@@ -40,8 +42,8 @@ $persona = $stmt_p->fetch(PDO::FETCH_ASSOC);
 if (!$persona) {
     die("Persona no encontrada.");
 }
+$nombre_completo = $persona['Nombre_Completo'];
 
-$nombre_completo = "{$persona['PNombre']} {$persona['SNombre']} {$persona['PApellido']} {$persona['SApellido']}";
 ?>
 
 <!DOCTYPE html>
@@ -69,7 +71,7 @@ $nombre_completo = "{$persona['PNombre']} {$persona['SNombre']} {$persona['PApel
             <h2 class="h4 text-secondary mb-0">
                 <i class="fas fa-user-graduate me-2"></i><?= htmlspecialchars($nombre_completo) ?>
             </h2>
-            <a href="personas.php" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i> Volver</a>
+            <a href="menu.php" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i> Volver</a>
         </div>
 
         <div class="card shadow-sm">

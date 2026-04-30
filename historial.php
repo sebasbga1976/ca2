@@ -13,7 +13,7 @@ $estcod = decryptToken($_REQUEST['token']) ?? die("Error: Código no especificad
 
 // --- 1. Consulta ---
 $stmt = $pdo->prepare("SELECT ce.Estcod, CONCAT(c.PNombre, ' ', c.SNombre, ' ', c.PApellido, ' ', c.SApellido) AS Nombre, c.Codpin, c.Exp, car.Nombre_Programa 
-                       FROM cli_est ce 
+                       FROM Cliente_Estudiante ce 
                        INNER JOIN Cliente c ON c.Codpin = ce.Codpin
                        INNER JOIN Estudiante e ON ce.Estcod = e.Estcod
                        INNER JOIN Carreras car ON e.carrcod = car.CarrCod 
