@@ -52,7 +52,7 @@ $ano      = $reg['Perano'];
 
 // Lógica de fechas
 $V        = substr($reg['Persecuencia'], -1); ; 
-$Fecha    = ($V != 1) ? 'Noviembre 30 de ' . $ano : 'Junio 30 de ' . $ano;
+$Fecha    = ($V != 1) ? 'noviembre 30 de ' . $ano : 'junio 30 de ' . $ano;
 
 // 6. Generación del PDF (Horizontal: 279mm)
 $pdf = new FPDF('L', 'mm', array(215, 279));
@@ -75,7 +75,7 @@ $pdf->Ln(6); // Espacio de separación
 
 // --- TEXTO FIJO ---
 $pdf->SetFont('Arial', '', 14); // Normal, no negrita para variar
-$pdf->Cell($ancho_util, 10, utf8_decode("Asistió y Aprobó el curso de: "), 0, 1, 'C');
+$pdf->Cell($ancho_util, 10, utf8_decode("Asistió y aprobó el curso de: "), 0, 1, 'C');
 
 // --- NOMBRE DEL CURSO ---
 $pdf->SetFont('Arial', 'B', 22);
@@ -89,7 +89,7 @@ $pdf->Cell($ancho_util, 10, utf8_decode("Con una intensidad de 24 Horas."), 0, 1
 // --- FECHA Y CIUDAD (PIE DEL DIPLOMA) ---
 $pdf->SetY(140); // Lo bajamos para que quede cerca de la zona de firmas
 $pdf->SetFont('Arial', '', 12);
-$pdf->Cell($ancho_util, 10, utf8_decode("En constancia se firma en la ciudad de Bucaramanga Fecha: " . $Fecha), 0, 1, 'C');
+$pdf->Cell($ancho_util, 10, utf8_decode("En constancia se firma en la ciudad de Bucaramanga, " . $Fecha), 0, 1, 'C');
 
 $pdf->Output();
 ?>
