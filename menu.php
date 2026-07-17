@@ -58,7 +58,7 @@ $sql_select = "SELECT DISTINCT c.Codpin, UPPER(c.PNombre) as PNombre, UPPER(c.SN
                UPPER(c.PApellido) as PApellido, UPPER(c.SApellido) as SApellido 
                FROM Cliente c 
                INNER JOIN Cliente_Estudiante ce ON c.Codpin = ce.Codpin
-               INNER JOIN Estudiante e ON ce.EstCod = e.Est_Cod
+               INNER JOIN Estudiante e ON ce.EstCod = e.EstCod
                WHERE $where_sql 
                ORDER BY c.PApellido, c.SApellido 
                LIMIT :inicio, :registros";
@@ -75,7 +75,7 @@ $personas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 // Total para paginación (Limpia de caracteres invisibles)
 $sql_total = "SELECT COUNT(DISTINCT c.Codpin) FROM Cliente c 
               INNER JOIN Cliente_Estudiante ce ON c.Codpin = ce.Codpin
-              INNER JOIN Estudiante e ON ce.EstCod = e.Est_Cod 
+              INNER JOIN Estudiante e ON ce.EstCod = e.EstCod 
               WHERE $where_sql";
               
 $stmt_total = $pdo->prepare($sql_total);
