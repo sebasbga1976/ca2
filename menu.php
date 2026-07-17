@@ -1,4 +1,9 @@
 <?php
+// 1. TEMPORAL: Mostrar errores en pantalla si algo falla (evita la pantalla en blanco)
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 session_start();
 if (!isset($_SESSION['usuario_id'])) {
     header("Location: index.php");
@@ -29,46 +34,54 @@ $mapeo_campos = [
 foreach ($mapeo_campos as $get_key => $db_col) {
     if (!empty($_GET[$get_key])) {
         $condiciones[] = "$db_col LIKE :$get_key";
-        $filtros[":$get_key"] = '%' . $_GET[$get_key] . '%';
+        $filtros[":$get_key"] = '%' . trim($_GET[$get_key]) . '%';
     }
 }
 
 // Filtros exactos (Selects)
-if (isset($_GET['es_estudiante']) && $_GET['es_estudiante'] !== '') {
+$es_estudiante = $_GET['es_estudiante'] ?? '';
+$es_docente = $_GET['es_docente'] ?? '';
+
+if ($es_estudiante !== '') {
     $condiciones[] = "c.Estudiante = :es_estudiante";
-    $filtros[':es_estudiante'] = $_GET['es_estudiante'];
+    $filtros[':es_estudiante'] = $es_estudiante;
 }
-if (isset($_GET['es_docente']) && $_GET['es_docente'] !== '') {
+if ($es_docente !== '') {
     $condiciones[] = "c.Docente = :es_docente";
-    $filtros[':es_docente'] = $_GET['es_docente'];
+    $filtros[':es_docente'] = $es_docente;
 }
 
 $where_sql = implode(" AND ", $condiciones);
 
-// Consulta
+// Consulta principal (Limpia de caracteres invisibles)
 $sql_select = "SELECT DISTINCT c.Codpin, UPPER(c.PNombre) as PNombre, UPPER(c.SNombre) as SNombre, 
                UPPER(c.PApellido) as PApellido, UPPER(c.SApellido) as SApellido 
                FROM Cliente c 
                INNER JOIN Cliente_Estudiante ce ON c.Codpin = ce.Codpin
-               INNER JOIN Estudiante e ON ce.EstCod = e.Estcod
+               INNER JOIN Estudiante e ON ce.EstCod = e.Est_Cod
                WHERE $where_sql 
                ORDER BY c.PApellido, c.SApellido 
                LIMIT :inicio, :registros";
 
 $stmt = $pdo->prepare($sql_select);
-foreach ($filtros as $clave => $valor) $stmt->bindValue($clave, $valor);
+foreach ($filtros as $clave => $valor) {
+    $stmt->bindValue($clave, $valor);
+}
 $stmt->bindValue(':inicio', $inicio, PDO::PARAM_INT);
 $stmt->bindValue(':registros', $registros_por_pagina, PDO::PARAM_INT);
 $stmt->execute();
 $personas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Total para paginación
+// Total para paginación (Limpia de caracteres invisibles)
 $sql_total = "SELECT COUNT(DISTINCT c.Codpin) FROM Cliente c 
               INNER JOIN Cliente_Estudiante ce ON c.Codpin = ce.Codpin
-              INNER JOIN Estudiante e ON ce.EstCod = e.Estcod 
+              INNER JOIN Estudiante e ON ce.EstCod = e.Est_Cod 
               WHERE $where_sql";
+              
 $stmt_total = $pdo->prepare($sql_total);
-foreach ($filtros as $clave => $valor) $stmt_total->bindValue($clave, $valor);
+foreach ($filtros as $clave => $valor) {
+    $stmt_total->bindValue($clave, $valor);
+}
 $stmt_total->execute();
 
 $total_registros = (int) $stmt_total->fetchColumn();
@@ -83,6 +96,7 @@ $fin_mostrado = min($inicio + count($personas), $total_registros);
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Personas</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
@@ -102,7 +116,14 @@ $fin_mostrado = min($inicio + count($personas), $total_registros);
 
     <div class="container">
         <div class="card mb-4 shadow-sm">
-            <div class="card-header bg-white fw-bold">Filtrar Búsqueda</div>
+            <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+                <span>Filtrar Búsqueda</span>
+                <?php if (!empty(array_filter($_GET))): ?>
+                    <a href="?" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 0.8rem;">
+                        <i class="fas fa-undo"></i> Limpiar Filtros
+                    </a>
+                <?php endif; ?>
+            </div>
             <div class="card-body">
                 <form method="get" class="row g-3">
                     <?php foreach ($mapeo_campos as $key => $col): ?>
@@ -113,8 +134,8 @@ $fin_mostrado = min($inicio + count($personas), $total_registros);
                     <div class="col-md-2">
                         <select name="es_estudiante" class="form-select form-select-sm">
                             <option value="">¿Es Estudiante?</option>
-                            <option value="1" <?= ($_GET['es_estudiante'] ?? '') === '1' ? 'selected' : '' ?>>Sí</option>
-                            <option value="0" <?= ($_GET['es_estudiante'] ?? '') === '0' ? 'selected' : '' ?>>No</option>
+                            <option value="1" <?= $es_estudiante === '1' ? 'selected' : '' ?>>Sí</option>
+                            <option value="0" <?= $es_estudiante === '0' ? 'selected' : '' ?>>No</option>
                         </select>
                     </div>
                     <div class="col-md-2">
@@ -137,18 +158,28 @@ $fin_mostrado = min($inicio + count($personas), $total_registros);
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($personas as $p): ?>
+                            <?php if (count($personas) > 0): ?>
+                                <?php foreach ($personas as $p): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($p['Codpin']) ?></td>
+                                        <td><?= htmlspecialchars($p['PNombre'] . ' ' . $p['SNombre']) ?></td>
+                                        <td><?= htmlspecialchars($p['PApellido'] . ' ' . $p['SApellido']) ?></td>
+                                        <td class="text-center">
+                                            <!-- Token encriptado y codificado correctamente para la URL -->
+                                            <a href="estudiantes.php?token=<?= urlencode(encryptToken($p['Codpin'])) ?>" class="btn btn-sm btn-outline-primary" title="Ver Perfil">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
                                 <tr>
-                                    <td><?= htmlspecialchars($p['Codpin']) ?></td>
-                                    <td><?= htmlspecialchars($p['PNombre'] . ' ' . $p['SNombre']) ?></td>
-                                    <td><?= htmlspecialchars($p['PApellido'] . ' ' . $p['SApellido']) ?></td>
-                                    <td class="text-center">
-                                        <a href="estudiantes.php?token=<?= encryptToken(urlencode($p['Codpin'])) ?>" class="btn btn-sm btn-outline-primary" title="Ver Perfil">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
+                                    <td colspan="4" class="text-center text-muted py-4">
+                                        <i class="fas fa-folder-open fa-2x mb-2 d-block"></i>
+                                        No se encontraron resultados que coincidan con la búsqueda.
                                     </td>
                                 </tr>
-                            <?php endforeach; ?>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
