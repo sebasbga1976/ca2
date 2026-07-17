@@ -1,86 +1,56 @@
 <?php
-// =========================================================================
-// MODO DE DEPURACIÓN ACTIVA (Borrar o comentar tras solucionar)
-// =========================================================================
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-echo "<h3>[DEBUG] Iniciando script de recuperación...</h3>";
+require_once 'conexion.php';
+require_once 'EmailService.php';
 
-echo "[DEBUG] Intentando cargar conexion.php...<br>";
-require_once 'conexion.php'; 
-echo "[DEBUG] conexion.php cargada con éxito.<br>";
-
-// Verificar qué variable de conexión creó tu archivo conexion.php
-if (isset($db)) {
-    echo "[DEBUG] Se detectó la variable de conexión: \$db<br>";
+// Asegurar compatibilidad si tu conexion.php define $db en lugar de $pdo
+if (!isset($pdo) && isset($db)) {
     $pdo = $db;
-} elseif (isset($pdo)) {
-    echo "[DEBUG] Se detectó la variable de conexión: \$pdo<br>";
-} else {
-    echo "<b style='color:red;'>[ERROR] No se encontró ninguna variable de conexión (\$db o \$pdo) tras cargar conexion.php</b><br>";
 }
-
-echo "[DEBUG] Intentando cargar EmailService.php...<br>";
-require_once 'EmailService.php'; 
-echo "[DEBUG] EmailService.php cargado con éxito.<br>";
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $email = isset($_POST['email']) ? trim($_POST['email']) : '';
-    echo "[DEBUG] Email recibido del formulario: " . htmlspecialchars($email) . "<br>";
 
     if (!empty($email)) {
         try {
-            echo "[DEBUG] Consultando si el usuario existe en la base de datos...<br>";
             $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE Email = :email");
             $stmt->execute([':email' => $email]);    
             $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($usuario) {
-                echo "<b style='color:green;'>[DEBUG] Usuario encontrado. ID: " . $usuario['id'] . "</b><br>";
-                
+                // Generar contraseña temporal de 8 caracteres
                 $temp_password = bin2hex(random_bytes(4)); 
-                echo "[DEBUG] Contraseña temporal generada: " . $temp_password . "<br>";
                 $password_hash = password_hash($temp_password, PASSWORD_DEFAULT);                        
 
-                echo "[DEBUG] Actualizando contraseña en la BD...<br>";
+                // Actualizar la contraseña temporal y exigir cambio en el primer inicio de sesión
                 $stmt = $pdo->prepare("UPDATE usuarios SET password = :pass, password_reset_required = 1 WHERE Email = :email");
                 $stmt->execute([':pass' => $password_hash, ':email' => $email]);        
-                echo "[DEBUG] Base de datos actualizada con éxito.<br>";
 
-                echo "[DEBUG] Inicializando EmailService e intentando cargar email_config.php de forma indirecta...<br>";
+                // Enviar el correo
                 $emailService = new EmailService();
-                
-                echo "[DEBUG] Intentando enviar el correo electrónico...<br>";
-                $fueEnviado = $emailService->enviarRestablecimiento($email, $temp_password);                
-                
-                if ($fueEnviado) {
-                    echo "<b style='color:green;'>[ÉXITO] El servicio de correo devolvió TRUE (Correo enviado).</b><br>";
-                } else {
-                    echo "<b style='color:orange;'>[ADVERTENCIA] El servicio de correo devolvió FALSE (No se envió).</b><br>";
-                }
-            } else {
-                echo "<b style='color:red;'>[DEBUG] El usuario no existe en la base de datos.</b><br>";
+                $emailService->enviarRestablecimiento($email, $temp_password);                
             }
+            
+            // Mensaje genérico por seguridad (evita que atacantes verifiquen qué correos existen)
+            $_SESSION['recuperar_msg'] = "Si el correo coincide con una cuenta activa, recibirás un mensaje con tu nueva contraseña temporal en unos minutos.";
+            $_SESSION['recuperar_tipo'] = "success";
 
         } catch (\Exception $e) {
-            echo "<h4 style='color:red;'>[CAPTURA DE EXCEPCIÓN] El sistema se detuvo por el siguiente error:</h4>";
-            echo "<pre>" . $e->getMessage() . "</pre>";
-            echo "<b>Archivo:</b> " . $e->getFile() . " en la línea " . $e->getLine() . "<br>";
+            // Guardar el error en el log del servidor en vez de mostrárselo al usuario
+            error_log("Error en recuperación de contraseña: " . $e->getMessage() . " en " . $e->getFile() . " Lín: " . $e->getLine());
+            
+            $_SESSION['recuperar_msg'] = "Ocurrió un inconveniente técnico al procesar tu solicitud. Por favor, inténtalo de nuevo más tarde.";
+            $_SESSION['recuperar_tipo'] = "danger";
         }
     } else {
-        echo "[DEBUG] El campo de email llegó vacío.<br>";
+        $_SESSION['recuperar_msg'] = "Por favor, ingresa una dirección de correo electrónico válida.";
+        $_SESSION['recuperar_tipo'] = "warning";
     }
-} else {
-    echo "[DEBUG] El script no se ejecutó mediante POST. Método actual: " . $_SERVER["REQUEST_METHOD"] . "<br>";
 }
 
-echo "<hr><b>[DEBUG] Fin del script de prueba. La redirección automática ha sido desactivada para que puedas leer este reporte.</b>";
-// header("Location: index.php"); // <--- Comentado temporalmente para depurar
+// Redirección limpia al index
+header("Location: index.php");
 exit();
-?>
